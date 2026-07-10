@@ -432,6 +432,52 @@
         }
       }
 
+      async function getCameraStream() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error("mediaDevices unavailable");
+        }
+
+        var attempts = [
+          {
+            video: {
+              facingMode: { exact: "environment" },
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            },
+            audio: false
+          },
+          {
+            video: {
+              facingMode: { ideal: "environment" },
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            },
+            audio: false
+          },
+          {
+            video: {
+              facingMode: "environment"
+            },
+            audio: false
+          },
+          {
+            video: true,
+            audio: false
+          }
+        ];
+
+        var lastError = null;
+        for (var i = 0; i < attempts.length; i += 1) {
+          try {
+            return await navigator.mediaDevices.getUserMedia(attempts[i]);
+          } catch (error) {
+            lastError = error;
+          }
+        }
+
+        throw lastError || new Error("camera unavailable");
+      }
+
       async function scanLoop() {
         if (!scanning || !detector) {
           return;
@@ -468,14 +514,7 @@
 
         try {
           detector = new BarcodeDetector({ formats: barcodeFormats });
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              facingMode: { ideal: "environment" },
-              width: { ideal: 1280 },
-              height: { ideal: 720 }
-            },
-            audio: false
-          });
+          stream = await getCameraStream();
 
           video.srcObject = stream;
           await video.play();
