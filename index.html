@@ -417,6 +417,30 @@
       }
 
       function playResultSound(type) {
+        var message = type === "match" ? "OK" : "MISMATCH";
+
+        if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
+          return;
+        }
+
+        window.speechSynthesis.cancel();
+
+        var utterance = new SpeechSynthesisUtterance(message);
+        utterance.lang = "en-US";
+        utterance.rate = 0.95;
+        utterance.pitch = type === "match" ? 1.05 : 0.85;
+        utterance.volume = 1;
+
+        window.speechSynthesis.speak(utterance);
+      }
+
+      function vibrate(pattern) {
+        if ("vibrate" in navigator) {
+          navigator.vibrate(pattern);
+        }
+      }
+
+      function playLockSound() {
         var AudioContext = window.AudioContext || window.webkitAudioContext;
         if (!AudioContext) {
           return;
@@ -430,14 +454,8 @@
           audioContext.resume();
         }
 
-        var now = audioContext.currentTime;
-        if (type === "match") {
-          playTone(880, now, 0.09, 0.18);
-          playTone(1175, now + 0.11, 0.12, 0.18);
-        } else {
-          playTone(220, now, 0.16, 0.2);
-          playTone(165, now + 0.18, 0.2, 0.2);
-        }
+        playTone(1046, audioContext.currentTime, 0.07, 0.16);
+        vibrate(60);
       }
 
       function compareIfReady() {
@@ -459,9 +477,11 @@
 
         if (first === second) {
           showResult("match", "MATCH", "ข้อความเหมือนกัน");
+          vibrate([80, 50, 80]);
           playResultSound("match");
         } else {
           showResult("mismatch", "MISMATCH", "ข้อความไม่เหมือนกัน");
+          vibrate([180, 80, 180, 80, 180]);
           playResultSound("mismatch");
         }
       }
@@ -473,13 +493,13 @@
         if (!isCompleteCode(code2.value)) {
           return code2;
         }
-        return code1;
+        return null;
       }
 
       function selectTarget(target) {
         var next = nextEmptyInput();
-        scanTarget = target === next && !target.disabled ? target : next;
-        scannerLabel.textContent = "กำลังสแกน: " + fieldName(scanTarget);
+        scanTarget = target && !target.disabled ? target : next;
+        scannerLabel.textContent = scanTarget ? "กำลังสแกน: " + fieldName(scanTarget) : "ข้อมูลครบทั้งสองช่อง";
       }
 
       function lockIfComplete(input) {
@@ -495,6 +515,7 @@
 
         if (isCompleteCode(value)) {
           input.disabled = true;
+          playLockSound();
           setStatus(fieldName(input) + " สมบูรณ์: ล็อคข้อมูลแล้ว", false);
           compareIfReady();
           return true;
@@ -514,8 +535,13 @@
         lastValue = value;
         lastTime = now;
 
-        if (scanTarget.disabled) {
+        if (!scanTarget || scanTarget.disabled) {
           selectTarget(nextEmptyInput());
+        }
+
+        if (!scanTarget) {
+          setStatus("ข้อมูลครบทั้งสองช่องแล้ว กด Clear เพื่อเริ่มใหม่", false);
+          return;
         }
 
         scanTarget.value = value;
@@ -523,7 +549,7 @@
         if (lockIfComplete(scanTarget)) {
           var next = nextEmptyInput();
           selectTarget(next);
-          if (!next.disabled) {
+          if (next && !next.disabled) {
             next.focus();
             setStatus("พร้อมสแกน " + fieldName(next), false);
           }
@@ -629,6 +655,11 @@
         }
         selectTarget(target);
 
+        if (!scanTarget) {
+          setStatus("ข้อมูลครบทั้งสองช่องแล้ว กด Clear เพื่อเริ่มใหม่", false);
+          return;
+        }
+
         if (stream) {
           scanner.classList.add("active");
           if (detector) {
@@ -691,7 +722,7 @@
         if (lockIfComplete(code1)) {
           var next = nextEmptyInput();
           selectTarget(next);
-          if (!next.disabled) {
+          if (next && !next.disabled) {
             next.focus();
           }
         }
@@ -700,7 +731,7 @@
         if (lockIfComplete(code2)) {
           var next = nextEmptyInput();
           selectTarget(next);
-          if (!next.disabled) {
+          if (next && !next.disabled) {
             next.focus();
           }
         }
