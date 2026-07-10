@@ -1,4 +1,4 @@
-const CACHE_NAME = "barcode-checker-v11";
+const CACHE_NAME = "barcode-checker-v12";
 const APP_FILES = [
   "./",
   "./index.html",

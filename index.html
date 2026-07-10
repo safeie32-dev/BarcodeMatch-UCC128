@@ -319,7 +319,7 @@
       <div class="field-card">
         <label for="code1">Forwarder</label>
         <div class="input-row">
-          <input id="code1" autocomplete="off" inputmode="text" placeholder="สแกน Forwarder">
+          <input id="code1" autocomplete="off" inputmode="none" placeholder="สแกน Forwarder" readonly>
           <button type="button" data-scan="code1">สแกน</button>
         </div>
       </div>
@@ -327,7 +327,7 @@
       <div class="field-card">
         <label for="code2">UCC-128</label>
         <div class="input-row">
-          <input id="code2" autocomplete="off" inputmode="text" placeholder="สแกน UCC-128">
+          <input id="code2" autocomplete="off" inputmode="none" placeholder="สแกน UCC-128" readonly>
           <button type="button" data-scan="code2">สแกน</button>
         </div>
       </div>
@@ -551,11 +551,10 @@
           closeCamera(false);
           selectTarget(next);
           if (next && !next.disabled) {
-            next.focus();
             setStatus("พร้อมสแกน " + fieldName(next) + " กดปุ่มสแกนเพื่อเริ่ม", false);
           }
         } else {
-          scanTarget.focus();
+          setStatus(fieldName(scanTarget) + " ต้องเป็นตัวเลข 10 หลัก", true);
         }
       }
 
@@ -684,7 +683,6 @@
           } else {
             detector = null;
             setStatus("เปิดกล้องได้ แต่เบราว์เซอร์นี้ยังไม่รองรับการอ่านบาร์โค้ดอัตโนมัติ กรุณาใช้ Chrome บน Android หรือยิงบาร์โค้ดเข้าช่อง", true);
-            scanTarget.focus();
           }
         } catch (error) {
           setStatus(cameraErrorMessage(error), true);
@@ -718,41 +716,31 @@
         selectTarget(code1);
         showResult("", "READY", "พร้อมเริ่มสแกน");
         setStatus("ล้างข้อมูลแล้ว พร้อมสแกนคู่ใหม่", false);
-        code1.focus();
       }
 
       code1.addEventListener("input", function () {
         if (lockIfComplete(code1)) {
           var next = nextEmptyInput();
           selectTarget(next);
-          if (next && !next.disabled) {
-            next.focus();
-          }
         }
       });
       code2.addEventListener("input", function () {
         if (lockIfComplete(code2)) {
           var next = nextEmptyInput();
           selectTarget(next);
-          if (next && !next.disabled) {
-            next.focus();
-          }
         }
       });
 
       [code1, code2].forEach(function (input) {
         input.addEventListener("focus", function () {
+          input.blur();
           selectTarget(input);
         });
         input.addEventListener("keydown", function (event) {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            if (input === code1) {
-              code2.focus();
-            } else {
-              compareIfReady();
-            }
-          }
+          event.preventDefault();
+        });
+        input.addEventListener("paste", function (event) {
+          event.preventDefault();
         });
       });
 
@@ -774,7 +762,6 @@
       }
 
       selectTarget(code1);
-      code1.focus();
     })();
   </script>
 </body>
