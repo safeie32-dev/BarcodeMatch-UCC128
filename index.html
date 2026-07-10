@@ -548,10 +548,11 @@
 
         if (lockIfComplete(scanTarget)) {
           var next = nextEmptyInput();
+          closeCamera(false);
           selectTarget(next);
           if (next && !next.disabled) {
             next.focus();
-            setStatus("พร้อมสแกน " + fieldName(next), false);
+            setStatus("พร้อมสแกน " + fieldName(next) + " กดปุ่มสแกนเพื่อเริ่ม", false);
           }
         } else {
           scanTarget.focus();
@@ -690,7 +691,7 @@
         }
       }
 
-      function closeCamera() {
+      function closeCamera(clearMessage) {
         scanning = false;
         if (stream) {
           stream.getTracks().forEach(function (track) {
@@ -700,7 +701,9 @@
         stream = null;
         video.srcObject = null;
         scanner.classList.remove("active");
-        setStatus("", false);
+        if (clearMessage !== false) {
+          setStatus("", false);
+        }
       }
 
       function clearAll() {
