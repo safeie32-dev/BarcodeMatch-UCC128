@@ -420,11 +420,26 @@
 
       function playResultSound(type) {
         var message = type === "match" ? "OK" : "MISMATCH";
+        var AudioContext = window.AudioContext || window.webkitAudioContext;
+        var now = 0;
 
-        if (type === "match" && audioContext) {
-          var now = audioContext.currentTime;
-          playTone(988, now, 0.06, 0.12);
-          playTone(1319, now + 0.07, 0.08, 0.12);
+        if (AudioContext && !audioContext) {
+          audioContext = new AudioContext();
+        }
+
+        if (audioContext && audioContext.state === "suspended") {
+          audioContext.resume();
+        }
+
+        if (audioContext) {
+          now = audioContext.currentTime;
+          if (type === "match") {
+            playTone(988, now, 0.06, 0.12);
+            playTone(1319, now + 0.07, 0.08, 0.12);
+          } else {
+            playTone(247, now, 0.12, 0.16);
+            playTone(196, now + 0.14, 0.16, 0.16);
+          }
         }
 
         if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
@@ -440,6 +455,22 @@
         utterance.volume = 1;
 
         window.speechSynthesis.speak(utterance);
+      }
+
+      function unlockAudio() {
+        var AudioContext = window.AudioContext || window.webkitAudioContext;
+
+        if (AudioContext && !audioContext) {
+          audioContext = new AudioContext();
+        }
+
+        if (audioContext && audioContext.state === "suspended") {
+          audioContext.resume();
+        }
+
+        if ("speechSynthesis" in window) {
+          window.speechSynthesis.resume();
+        }
       }
 
       function vibrate(pattern) {
@@ -780,6 +811,7 @@
 
       document.querySelectorAll("[data-scan]").forEach(function (button) {
         button.addEventListener("click", function () {
+          unlockAudio();
           var target = document.getElementById(button.getAttribute("data-scan"));
           openCamera(target);
         });
