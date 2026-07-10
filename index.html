@@ -340,6 +340,7 @@
     <div id="status" class="status"></div>
   </main>
 
+  <script src="zxing-library.min.js"></script>
   <script>
     (function () {
       "use strict";
@@ -354,6 +355,7 @@
       var clear = document.getElementById("clear");
 
       var detector = null;
+      var zxingReader = null;
       var stream = null;
       var scanTarget = code1;
       var scanning = false;
@@ -629,6 +631,29 @@
         }
       }
 
+      function startZxingScanner() {
+        if (!window.ZXing || !ZXing.BrowserMultiFormatReader) {
+          setStatus("เบราว์เซอร์นี้ยังไม่รองรับการอ่านบาร์โค้ด กรุณาใช้ Chrome บน Android หรือ Safari เวอร์ชันล่าสุด", true);
+          return;
+        }
+
+        if (zxingReader) {
+          zxingReader.reset();
+        }
+
+        var hints = new Map();
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.CODE_128]);
+        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+        zxingReader = new ZXing.BrowserMultiFormatReader(hints, 250);
+
+        setStatus("เล็งบาร์โค้ดให้อยู่ในกรอบ", false);
+        zxingReader.decodeFromVideoElement(video, function (result) {
+          if (result && scanning) {
+            fillTarget(result.getText());
+          }
+        });
+      }
+
       function cameraErrorMessage(error) {
         var name = error && error.name ? error.name : "";
 
@@ -687,8 +712,7 @@
             setStatus("เล็งบาร์โค้ดให้อยู่ในกรอบ", false);
             scanLoop();
           } else {
-            detector = null;
-            setStatus("เปิดกล้องได้ แต่เบราว์เซอร์นี้ยังไม่รองรับการอ่านบาร์โค้ดอัตโนมัติ กรุณาใช้ Chrome บน Android หรือยิงบาร์โค้ดเข้าช่อง", true);
+            startZxingScanner();
           }
         } catch (error) {
           setStatus(cameraErrorMessage(error), true);
@@ -702,7 +726,11 @@
             track.stop();
           });
         }
+        if (zxingReader) {
+          zxingReader.reset();
+        }
         stream = null;
+        detector = null;
         video.srcObject = null;
         scanner.classList.remove("active");
         if (clearMessage !== false) {
