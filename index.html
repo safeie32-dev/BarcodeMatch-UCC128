@@ -432,13 +432,15 @@
         }
 
         if (audioContext) {
-          now = audioContext.currentTime;
+          now = audioContext.currentTime + 0.05;
           if (type === "match") {
-            playTone(988, now, 0.06, 0.12);
-            playTone(1319, now + 0.07, 0.08, 0.12);
+            playTone(784, now, 0.08, 0.18);
+            playTone(1046, now + 0.1, 0.08, 0.18);
+            playTone(1319, now + 0.2, 0.14, 0.18);
           } else {
-            playTone(247, now, 0.12, 0.16);
-            playTone(196, now + 0.14, 0.16, 0.16);
+            playTone(330, now, 0.14, 0.2);
+            playTone(247, now + 0.16, 0.14, 0.2);
+            playTone(196, now + 0.32, 0.2, 0.2);
           }
         }
 
@@ -457,7 +459,7 @@
         window.speechSynthesis.speak(utterance);
       }
 
-      function unlockAudio() {
+      function unlockAudio(withTestTone) {
         var AudioContext = window.AudioContext || window.webkitAudioContext;
 
         if (AudioContext && !audioContext) {
@@ -465,7 +467,13 @@
         }
 
         if (audioContext && audioContext.state === "suspended") {
-          audioContext.resume();
+          audioContext.resume().then(function () {
+            if (withTestTone) {
+              playTone(660, audioContext.currentTime, 0.05, 0.08);
+            }
+          });
+        } else if (audioContext && withTestTone) {
+          playTone(660, audioContext.currentTime, 0.05, 0.08);
         }
 
         if ("speechSynthesis" in window) {
@@ -811,7 +819,7 @@
 
       document.querySelectorAll("[data-scan]").forEach(function (button) {
         button.addEventListener("click", function () {
-          unlockAudio();
+          unlockAudio(true);
           var target = document.getElementById(button.getAttribute("data-scan"));
           openCamera(target);
         });
