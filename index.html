@@ -419,6 +419,12 @@
       function playResultSound(type) {
         var message = type === "match" ? "OK" : "MISMATCH";
 
+        if (type === "match" && audioContext) {
+          var now = audioContext.currentTime;
+          playTone(988, now, 0.06, 0.12);
+          playTone(1319, now + 0.07, 0.08, 0.12);
+        }
+
         if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
           return;
         }
@@ -427,8 +433,8 @@
 
         var utterance = new SpeechSynthesisUtterance(message);
         utterance.lang = "en-US";
-        utterance.rate = 0.95;
-        utterance.pitch = type === "match" ? 1.05 : 0.85;
+        utterance.rate = type === "match" ? 1.08 : 0.95;
+        utterance.pitch = type === "match" ? 1.35 : 0.85;
         utterance.volume = 1;
 
         window.speechSynthesis.speak(utterance);
