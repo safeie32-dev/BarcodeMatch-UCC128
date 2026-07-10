@@ -545,9 +545,7 @@
 
       if ("serviceWorker" in navigator && location.protocol !== "file:") {
         window.addEventListener("load", function () {
-          navigator.serviceWorker.register("./sw.js").catch(function () {
-            setStatus("ติดตั้งโหมดออฟไลน์ไม่ได้ในเบราว์เซอร์นี้", true);
-          });
+          navigator.serviceWorker.register("./sw.js").catch(function () {});
         });
       }
 
