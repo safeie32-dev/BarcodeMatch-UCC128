@@ -227,6 +227,14 @@
       text-align: center;
     }
 
+    input:disabled {
+      border-color: var(--green);
+      background: #edf9f2;
+      color: var(--green);
+      opacity: 1;
+      font-weight: 800;
+    }
+
     input:focus,
     button:focus-visible {
       outline: 3px solid rgba(23, 105, 224, 0.22);
@@ -351,6 +359,8 @@
       var scanning = false;
       var lastValue = "";
       var lastTime = 0;
+      var lastComparedPair = "";
+      var audioContext = null;
 
       var barcodeFormats = [
         "aztec",
@@ -372,6 +382,14 @@
         return value.trim();
       }
 
+      function isCompleteCode(value) {
+        return /^\d{10}$/.test(clean(value));
+      }
+
+      function fieldName(input) {
+        return input === code1 ? "Forwarder" : "UCC-128";
+      }
+
       function setStatus(message, warning) {
         status.textContent = message;
         status.classList.toggle("warn", Boolean(warning));
@@ -382,35 +400,110 @@
         result.innerHTML = "<div><strong>" + headline + "</strong><span>" + detail + "</span></div>";
       }
 
+      function playTone(frequency, startTime, duration, volume) {
+        var oscillator = audioContext.createOscillator();
+        var gain = audioContext.createGain();
+
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(frequency, startTime);
+        gain.gain.setValueAtTime(0.001, startTime);
+        gain.gain.exponentialRampToValueAtTime(volume, startTime + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+        oscillator.start(startTime);
+        oscillator.stop(startTime + duration + 0.02);
+      }
+
+      function playResultSound(type) {
+        var AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) {
+          return;
+        }
+
+        if (!audioContext) {
+          audioContext = new AudioContext();
+        }
+
+        if (audioContext.state === "suspended") {
+          audioContext.resume();
+        }
+
+        var now = audioContext.currentTime;
+        if (type === "match") {
+          playTone(880, now, 0.09, 0.18);
+          playTone(1175, now + 0.11, 0.12, 0.18);
+        } else {
+          playTone(220, now, 0.16, 0.2);
+          playTone(165, now + 0.18, 0.2, 0.2);
+        }
+      }
+
       function compareIfReady() {
         var first = clean(code1.value);
         var second = clean(code2.value);
+        var pairKey = "";
 
-        if (!first || !second) {
+        if (!isCompleteCode(first) || !isCompleteCode(second)) {
+          lastComparedPair = "";
           showResult("", "READY", "รอข้อมูลให้ครบทั้ง 2 ชุด");
           return;
         }
 
+        pairKey = first + "|" + second;
+        if (pairKey === lastComparedPair) {
+          return;
+        }
+        lastComparedPair = pairKey;
+
         if (first === second) {
           showResult("match", "MATCH", "ข้อความเหมือนกัน");
+          playResultSound("match");
         } else {
           showResult("mismatch", "MISMATCH", "ข้อความไม่เหมือนกัน");
+          playResultSound("mismatch");
         }
       }
 
       function nextEmptyInput() {
-        if (!clean(code1.value)) {
+        if (!isCompleteCode(code1.value)) {
           return code1;
         }
-        if (!clean(code2.value)) {
+        if (!isCompleteCode(code2.value)) {
           return code2;
         }
         return code1;
       }
 
       function selectTarget(target) {
-        scanTarget = target || nextEmptyInput();
-        scannerLabel.textContent = "กำลังสแกน: " + (scanTarget === code1 ? "Forwarder" : "UCC-128");
+        var next = nextEmptyInput();
+        scanTarget = target === next && !target.disabled ? target : next;
+        scannerLabel.textContent = "กำลังสแกน: " + fieldName(scanTarget);
+      }
+
+      function lockIfComplete(input) {
+        var value = clean(input.value);
+
+        input.value = value;
+
+        if (!value) {
+          input.disabled = false;
+          compareIfReady();
+          return false;
+        }
+
+        if (isCompleteCode(value)) {
+          input.disabled = true;
+          setStatus(fieldName(input) + " สมบูรณ์: ล็อคข้อมูลแล้ว", false);
+          compareIfReady();
+          return true;
+        }
+
+        input.disabled = false;
+        showResult("", "READY", "รอข้อมูลตัวเลข 10 หลัก");
+        setStatus(fieldName(input) + " ต้องเป็นตัวเลข 10 หลัก", true);
+        return false;
       }
 
       function fillTarget(value) {
@@ -421,14 +514,21 @@
         lastValue = value;
         lastTime = now;
 
-        scanTarget.value = value;
-        scanTarget.dispatchEvent(new Event("input", { bubbles: true }));
-
-        if (scanTarget === code1 && !clean(code2.value)) {
-          selectTarget(code2);
-          code2.focus();
-        } else {
+        if (scanTarget.disabled) {
           selectTarget(nextEmptyInput());
+        }
+
+        scanTarget.value = value;
+
+        if (lockIfComplete(scanTarget)) {
+          var next = nextEmptyInput();
+          selectTarget(next);
+          if (!next.disabled) {
+            next.focus();
+            setStatus("พร้อมสแกน " + fieldName(next), false);
+          }
+        } else {
+          scanTarget.focus();
         }
       }
 
@@ -497,33 +597,65 @@
         }
       }
 
+      function cameraErrorMessage(error) {
+        var name = error && error.name ? error.name : "";
+
+        if (location.protocol !== "https:" && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
+          return "เปิดกล้องไม่ได้: ต้องเปิดผ่าน HTTPS";
+        }
+
+        if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+          return "เปิดกล้องไม่ได้: กรุณาอนุญาตสิทธิ์กล้องในเบราว์เซอร์";
+        }
+
+        if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+          return "เปิดกล้องไม่ได้: ไม่พบกล้องบนอุปกรณ์นี้";
+        }
+
+        if (name === "NotReadableError" || name === "TrackStartError") {
+          return "เปิดกล้องไม่ได้: กล้องอาจถูกแอพอื่นใช้งานอยู่";
+        }
+
+        if (name === "OverconstrainedError" || name === "ConstraintNotSatisfiedError") {
+          return "เปิดกล้องไม่ได้: มือถือไม่รองรับการตั้งค่ากล้องนี้";
+        }
+
+        return "เปิดกล้องไม่ได้: กรุณาเปิดด้วย Chrome/Safari โดยตรง และอนุญาตสิทธิ์กล้อง";
+      }
+
       async function openCamera(target) {
+        if (target && target.disabled) {
+          target = nextEmptyInput();
+        }
         selectTarget(target);
 
         if (stream) {
           scanner.classList.add("active");
-          setStatus("เล็งบาร์โค้ดให้อยู่ในกรอบ", false);
-          return;
-        }
-
-        if (!("BarcodeDetector" in window)) {
-          setStatus("เบราว์เซอร์นี้ยังไม่รองรับสแกนผ่านกล้องแบบออฟไลน์ กรุณายิงบาร์โค้ดเข้าช่องกรอกหรือพิมพ์แทน", true);
-          scanTarget.focus();
+          if (detector) {
+            setStatus("เล็งบาร์โค้ดให้อยู่ในกรอบ", false);
+          }
           return;
         }
 
         try {
-          detector = new BarcodeDetector({ formats: barcodeFormats });
           stream = await getCameraStream();
 
           video.srcObject = stream;
           await video.play();
           scanning = true;
           scanner.classList.add("active");
-          setStatus("เล็งบาร์โค้ดให้อยู่ในกรอบ", false);
-          scanLoop();
+
+          if ("BarcodeDetector" in window) {
+            detector = new BarcodeDetector({ formats: barcodeFormats });
+            setStatus("เล็งบาร์โค้ดให้อยู่ในกรอบ", false);
+            scanLoop();
+          } else {
+            detector = null;
+            setStatus("เปิดกล้องได้ แต่เบราว์เซอร์นี้ยังไม่รองรับการอ่านบาร์โค้ดอัตโนมัติ กรุณาใช้ Chrome บน Android หรือยิงบาร์โค้ดเข้าช่อง", true);
+            scanTarget.focus();
+          }
         } catch (error) {
-          setStatus("เปิดกล้องไม่ได้ กรุณาอนุญาตใช้กล้อง หรือเปิดผ่าน HTTPS/localhost แล้วลองใหม่", true);
+          setStatus(cameraErrorMessage(error), true);
         }
       }
 
@@ -542,18 +674,37 @@
 
       function clearAll() {
         closeCamera();
+        code1.disabled = false;
+        code2.disabled = false;
         code1.value = "";
         code2.value = "";
         lastValue = "";
         lastTime = 0;
+        lastComparedPair = "";
         selectTarget(code1);
         showResult("", "READY", "พร้อมเริ่มสแกน");
         setStatus("ล้างข้อมูลแล้ว พร้อมสแกนคู่ใหม่", false);
         code1.focus();
       }
 
-      code1.addEventListener("input", compareIfReady);
-      code2.addEventListener("input", compareIfReady);
+      code1.addEventListener("input", function () {
+        if (lockIfComplete(code1)) {
+          var next = nextEmptyInput();
+          selectTarget(next);
+          if (!next.disabled) {
+            next.focus();
+          }
+        }
+      });
+      code2.addEventListener("input", function () {
+        if (lockIfComplete(code2)) {
+          var next = nextEmptyInput();
+          selectTarget(next);
+          if (!next.disabled) {
+            next.focus();
+          }
+        }
+      });
 
       [code1, code2].forEach(function (input) {
         input.addEventListener("focus", function () {
