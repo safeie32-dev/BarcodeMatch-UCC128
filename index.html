@@ -525,12 +525,12 @@
 
         if (first === second) {
           showResult("match", "MATCH", "ข้อความเหมือนกัน");
-          setStatus("ข้อมูลตรงกัน ระบบจะเริ่มใหม่อัตโนมัติใน 3 วินาที", false);
+          setStatus("ข้อมูลตรงกัน ระบบจะเริ่มใหม่อัตโนมัติใน 2 วินาที", false);
           vibrate([80, 50, 80]);
           playResultSound("match");
           matchClearTimer = window.setTimeout(function () {
             clearAll();
-          }, 3000);
+          }, 2000);
         } else {
           showResult("mismatch", "MISMATCH", "ข้อความไม่เหมือนกัน");
           setStatus("ข้อมูลไม่ตรงกัน กด Clear เพื่อเริ่มสแกนใหม่", true);
