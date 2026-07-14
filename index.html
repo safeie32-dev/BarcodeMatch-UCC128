@@ -340,6 +340,21 @@
     <div id="status" class="status"></div>
   </main>
 
+  <script type="module">
+    import { prepareZXingModule, readBarcodes } from "./zxing-wasm-reader.js";
+
+    window.ZXingWasmBarcodeReader = {
+      readBarcodes: readBarcodes,
+      ready: prepareZXingModule({
+        overrides: {
+          locateFile: function (path) {
+            return path.endsWith(".wasm") ? "./zxing_reader.wasm" : path;
+          }
+        },
+        fireImmediately: true
+      })
+    };
+  </script>
   <script src="zxing-library.min.js"></script>
   <script>
     (function () {
@@ -356,6 +371,10 @@
 
       var detector = null;
       var zxingReader = null;
+      var wasmFrameRequest = null;
+      var wasmDecodeBusy = false;
+      var wasmCanvas = document.createElement("canvas");
+      var wasmContext = wasmCanvas.getContext("2d", { willReadFrequently: true });
       var stream = null;
       var scanTarget = code1;
       var scanning = false;
@@ -730,6 +749,82 @@
         }
       }
 
+      function scheduleWasmFrame() {
+        wasmFrameRequest = window.setTimeout(scanWasmFrame, 260);
+      }
+
+      async function scanWasmFrame() {
+        if (!scanning || wasmDecodeBusy || !window.ZXingWasmBarcodeReader) {
+          if (scanning) {
+            scheduleWasmFrame();
+          }
+          return;
+        }
+
+        if (video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
+          scheduleWasmFrame();
+          return;
+        }
+
+        wasmDecodeBusy = true;
+
+        try {
+          var maxWidth = 960;
+          var scale = Math.min(1, maxWidth / video.videoWidth);
+          var width = Math.max(1, Math.round(video.videoWidth * scale));
+          var height = Math.max(1, Math.round(video.videoHeight * scale));
+
+          wasmCanvas.width = width;
+          wasmCanvas.height = height;
+          wasmContext.drawImage(video, 0, 0, width, height);
+
+          var imageData = wasmContext.getImageData(0, 0, width, height);
+          var results = await window.ZXingWasmBarcodeReader.readBarcodes(imageData, {
+            formats: ["Code128", "Code39", "Code93", "ITF", "EAN13", "EAN8", "UPCA", "UPCE"],
+            tryHarder: true,
+            tryRotate: true,
+            tryInvert: true,
+            tryDownscale: true,
+            maxNumberOfSymbols: 1,
+            textMode: "Plain"
+          });
+
+          if (results && results.length && results[0].text && scanning) {
+            fillTarget(results[0].text);
+          }
+        } catch (error) {
+          if (scanning) {
+            setStatus("กำลังอ่านบาร์โค้ดด้วย WASM", false);
+          }
+        } finally {
+          wasmDecodeBusy = false;
+          if (scanning) {
+            scheduleWasmFrame();
+          }
+        }
+      }
+
+      async function startWasmScanner() {
+        if (!window.ZXingWasmBarcodeReader || !window.ZXingWasmBarcodeReader.ready) {
+          return false;
+        }
+
+        try {
+          await window.ZXingWasmBarcodeReader.ready;
+          stream = await getCameraStream();
+          video.srcObject = stream;
+          await video.play();
+          scanning = true;
+          scanner.classList.add("active");
+          setStatus("เล็งบาร์โค้ดให้อยู่ในกรอบ", false);
+          scheduleWasmFrame();
+          return true;
+        } catch (error) {
+          closeCamera(false);
+          return false;
+        }
+      }
+
       function cameraErrorMessage(error) {
         var name = error && error.name ? error.name : "";
 
@@ -786,7 +881,10 @@
             setStatus("เล็งบาร์โค้ดให้อยู่ในกรอบ", false);
             scanLoop();
           } else {
-            await startZxingScanner();
+            var wasmStarted = await startWasmScanner();
+            if (!wasmStarted) {
+              await startZxingScanner();
+            }
           }
         } catch (error) {
           setStatus(cameraErrorMessage(error), true);
@@ -803,6 +901,11 @@
         if (zxingReader) {
           zxingReader.reset();
         }
+        if (wasmFrameRequest) {
+          window.clearTimeout(wasmFrameRequest);
+          wasmFrameRequest = null;
+        }
+        wasmDecodeBusy = false;
         stream = null;
         detector = null;
         video.srcObject = null;

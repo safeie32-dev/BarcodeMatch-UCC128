@@ -1,8 +1,11 @@
-const CACHE_NAME = "barcode-checker-v20";
+const CACHE_NAME = "barcode-checker-v21";
 const APP_FILES = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
+  "./zxing-wasm-reader.js",
+  "./share.js",
+  "./zxing_reader.wasm",
   "./zxing-library.min.js",
   "./app-icon-192.png",
   "./app-icon-512.png"
