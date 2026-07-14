@@ -676,7 +676,23 @@
         }
       }
 
-      function startZxingScanner() {
+      function zxingFormats() {
+        return [
+          ZXing.BarcodeFormat.CODE_128,
+          ZXing.BarcodeFormat.CODE_39,
+          ZXing.BarcodeFormat.CODE_93,
+          ZXing.BarcodeFormat.CODABAR,
+          ZXing.BarcodeFormat.EAN_13,
+          ZXing.BarcodeFormat.EAN_8,
+          ZXing.BarcodeFormat.ITF,
+          ZXing.BarcodeFormat.UPC_A,
+          ZXing.BarcodeFormat.UPC_E
+        ].filter(function (format) {
+          return format !== undefined && format !== null;
+        });
+      }
+
+      async function startZxingScanner() {
         if (!window.ZXing || !ZXing.BrowserMultiFormatReader) {
           setStatus("เบราว์เซอร์นี้ยังไม่รองรับการอ่านบาร์โค้ด กรุณาใช้ Chrome บน Android หรือ Safari เวอร์ชันล่าสุด", true);
           return;
@@ -687,16 +703,31 @@
         }
 
         var hints = new Map();
-        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.CODE_128]);
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, zxingFormats());
         hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
         zxingReader = new ZXing.BrowserMultiFormatReader(hints, 250);
 
+        scanning = true;
+        scanner.classList.add("active");
         setStatus("เล็งบาร์โค้ดให้อยู่ในกรอบ", false);
-        zxingReader.decodeFromVideoElement(video, function (result) {
-          if (result && scanning) {
-            fillTarget(result.getText());
-          }
-        });
+
+        try {
+          await zxingReader.decodeFromConstraints({
+            video: {
+              facingMode: { ideal: "environment" },
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            },
+            audio: false
+          }, video, function (result) {
+            if (result && scanning) {
+              fillTarget(result.getText());
+            }
+          });
+        } catch (error) {
+          setStatus(cameraErrorMessage(error), true);
+          closeCamera(false);
+        }
       }
 
       function cameraErrorMessage(error) {
@@ -745,19 +776,17 @@
         }
 
         try {
-          stream = await getCameraStream();
-
-          video.srcObject = stream;
-          await video.play();
-          scanning = true;
-          scanner.classList.add("active");
-
           if ("BarcodeDetector" in window) {
+            stream = await getCameraStream();
+            video.srcObject = stream;
+            await video.play();
+            scanning = true;
+            scanner.classList.add("active");
             detector = new BarcodeDetector({ formats: barcodeFormats });
             setStatus("เล็งบาร์โค้ดให้อยู่ในกรอบ", false);
             scanLoop();
           } else {
-            startZxingScanner();
+            await startZxingScanner();
           }
         } catch (error) {
           setStatus(cameraErrorMessage(error), true);
